@@ -24,7 +24,9 @@ if (flutterVersionName == null) {
 
 
 android {
-    compileSdk 34
+    buildToolsVersion "36.0.0"
+    ndkVersion "29.0.13113456"
+    compileSdk 35
     namespace "com.jhomlala.better_player_example"
 
     compileOptions {
@@ -34,7 +36,22 @@ android {
 
     kotlinOptions {
         jvmTarget = '1.8'
+        freeCompilerArgs += [
+            '-Xopt-in=kotlin.RequiresOptIn',
+            '-Xjvm-default=all'
+        ]
     }
+
+    aaptOptions {
+        cruncherEnabled = false
+    }
+
+    dexOptions {
+        javaMaxHeapSize "4g"
+    }
+
+    // Increase daemon timeout
+    project.gradle.startParameter.maxWorkerCount = 4
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
@@ -47,7 +64,7 @@ android {
     defaultConfig {
         applicationId "com.jhomlala.better_player_example"
         minSdkVersion 21
-        targetSdkVersion 34
+        targetSdkVersion 35
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
         multiDexEnabled true
@@ -67,4 +84,11 @@ flutter {
 
 dependencies {
     implementation "androidx.multidex:multidex:2.0.1"
+}
+
+// Add at the bottom of the file
+gradle.projectsEvaluated {
+    tasks.withType(JavaCompile) {
+        options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
+    }
 }
