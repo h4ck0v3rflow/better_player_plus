@@ -98,7 +98,7 @@ class _BetterPlayerWithControlsState extends State<BetterPlayerWithControls> {
     }
   }
 
-  Container _buildPlayerWithControls(BetterPlayerController betterPlayerController, BuildContext context) {
+  Widget _buildPlayerWithControls(BetterPlayerController betterPlayerController, BuildContext context) {
     final configuration = betterPlayerController.betterPlayerConfiguration;
     var rotation = configuration.rotation;
 
@@ -112,27 +112,24 @@ class _BetterPlayerWithControlsState extends State<BetterPlayerWithControls> {
     _initialized = true;
 
     final bool placeholderOnTop = betterPlayerController.betterPlayerConfiguration.placeholderOnTop;
-    // ignore: avoid_unnecessary_containers
-    return Container(
-      child: Stack(
-        fit: StackFit.passthrough,
-        children: <Widget>[
-          if (placeholderOnTop) _buildPlaceholder(betterPlayerController),
-          Transform.rotate(
-            angle: rotation * pi / 180,
-            child: _BetterPlayerVideoFitWidget(betterPlayerController, betterPlayerController.getFit()),
-          ),
-          betterPlayerController.betterPlayerConfiguration.overlay ?? Container(),
-          BetterPlayerSubtitlesDrawer(
-            betterPlayerController: betterPlayerController,
-            betterPlayerSubtitlesConfiguration: subtitlesConfiguration,
-            subtitles: betterPlayerController.subtitlesLines,
-            playerVisibilityStream: playerVisibilityStreamController.stream,
-          ),
-          if (!placeholderOnTop) _buildPlaceholder(betterPlayerController),
-          _buildControls(context, betterPlayerController),
-        ],
-      ),
+    return Stack(
+      fit: StackFit.passthrough,
+      children: <Widget>[
+        if (placeholderOnTop) _buildPlaceholder(betterPlayerController),
+        Transform.rotate(
+          angle: rotation * pi / 180,
+          child: _BetterPlayerVideoFitWidget(betterPlayerController, betterPlayerController.getFit()),
+        ),
+        betterPlayerController.betterPlayerConfiguration.overlay ?? Container(),
+        BetterPlayerSubtitlesDrawer(
+          betterPlayerController: betterPlayerController,
+          betterPlayerSubtitlesConfiguration: subtitlesConfiguration,
+          subtitles: betterPlayerController.subtitlesLines,
+          playerVisibilityStream: playerVisibilityStreamController.stream,
+        ),
+        if (!placeholderOnTop) _buildPlaceholder(betterPlayerController),
+        _buildControls(context, betterPlayerController),
+      ],
     );
   }
 
@@ -264,32 +261,36 @@ class _BetterPlayerVideoFitWidgetState extends State<_BetterPlayerVideoFitWidget
 
   List<Widget> _buildBlurLogos(double videoWidth, double videoHeight) {
     final blurLogos = widget.betterPlayerController.betterPlayerConfiguration.blurLogos;
-    if (blurLogos == null || blurLogos.isEmpty) return const [];
+    if (blurLogos == null || blurLogos.isEmpty) {
+      return const [];
+    }
 
-    return blurLogos.map((blur) {
-      return Positioned(
-        left: blur.left * videoWidth,
-        top: blur.top * videoHeight,
-        width: blur.width * videoWidth,
-        height: blur.height * videoHeight,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(blur.borderRadius),
-          // Stack multiple BackdropFilter passes to compound the blur.
-          // A single pass only softens; 3 passes obliterate the logo
-          // while keeping the effect visually natural.
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: blur.sigmaX, sigmaY: blur.sigmaY),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: blur.sigmaX, sigmaY: blur.sigmaY),
+    return blurLogos
+        .map(
+          (blur) => Positioned(
+            left: blur.left * videoWidth,
+            top: blur.top * videoHeight,
+            width: blur.width * videoWidth,
+            height: blur.height * videoHeight,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(blur.borderRadius),
+              // Stack multiple BackdropFilter passes to compound the blur.
+              // A single pass only softens; 3 passes obliterate the logo
+              // while keeping the effect visually natural.
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: blur.sigmaX, sigmaY: blur.sigmaY),
-                child: Container(color: blur.overlayColor),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: blur.sigmaX, sigmaY: blur.sigmaY),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: blur.sigmaX, sigmaY: blur.sigmaY),
+                    child: Container(color: blur.overlayColor),
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      );
-    }).toList();
+        )
+        .toList();
   }
 
   @override
@@ -297,17 +298,14 @@ class _BetterPlayerVideoFitWidgetState extends State<_BetterPlayerVideoFitWidget
     if (_initialized && _started) {
       final double videoWidth = max(1, controller!.value.size?.width ?? 1.0);
       final double videoHeight = max(1, controller!.value.size?.height ?? 1.0);
-      
+
       // iOS platform views (UiKitView) don't play well with Clip/Transform/FittedBox.
       // Render the platform view directly to avoid black screen.
       if (Platform.isIOS) {
         return SizedBox.expand(
           child: Stack(
             fit: StackFit.expand,
-            children: [
-              VideoPlayer(controller),
-              ..._buildBlurLogos(videoWidth, videoHeight),
-            ],
+            children: [VideoPlayer(controller), ..._buildBlurLogos(videoWidth, videoHeight)],
           ),
         );
       }
@@ -321,10 +319,7 @@ class _BetterPlayerVideoFitWidgetState extends State<_BetterPlayerVideoFitWidget
                 height: videoHeight,
                 child: Stack(
                   fit: StackFit.passthrough,
-                  children: [
-                    VideoPlayer(controller),
-                    ..._buildBlurLogos(videoWidth, videoHeight),
-                  ],
+                  children: [VideoPlayer(controller), ..._buildBlurLogos(videoWidth, videoHeight)],
                 ),
               ),
             ),

@@ -3,6 +3,17 @@ import 'package:flutter/material.dart';
 /// Configuration for a blur overlay that hides a logo in the video.
 /// Coordinates and sizes are relative to the video frame (0.0 to 1.0).
 class BetterPlayerLogoBlur {
+  const BetterPlayerLogoBlur({
+    required this.left,
+    required this.top,
+    required this.width,
+    required this.height,
+    this.sigmaX = 12.0,
+    this.sigmaY = 12.0,
+    this.borderRadius = 8.0,
+    this.overlayColor = const Color(0x0DFFFFFF), // 5% White
+  });
+
   /// Left padding relative to the video frame (0.0 to 1.0)
   final double left;
 
@@ -26,15 +37,4 @@ class BetterPlayerLogoBlur {
 
   /// Optional overlay color to blend with the blur
   final Color overlayColor;
-
-  const BetterPlayerLogoBlur({
-    required this.left,
-    required this.top,
-    required this.width,
-    required this.height,
-    this.sigmaX = 12.0,
-    this.sigmaY = 12.0,
-    this.borderRadius = 8.0,
-    this.overlayColor = const Color(0x0DFFFFFF), // 5% White
-  });
 }
