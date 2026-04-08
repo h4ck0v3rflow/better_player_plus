@@ -171,7 +171,7 @@ internal class BetterPlayer(
                     .build(httpMediaDrmCallback)
             }
         } else if (!clearKey.isNullOrEmpty()) {
-            DefaultDrmSessionManager.Builder()
+            drmSessionManager = DefaultDrmSessionManager.Builder()
                 .setUuidAndExoMediaDrmProvider(
                     C.CLEARKEY_UUID,
                     FrameworkMediaDrm.DEFAULT_PROVIDER
@@ -462,22 +462,69 @@ internal class BetterPlayer(
         exoPlayer?.setVideoSurface(surface)
         setAudioAttributes(exoPlayer, true)
         exoPlayer?.addListener(object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                when (playbackState) {
-                    Player.STATE_BUFFERING -> {
-                        sendBufferingUpdate(true)
-                        val event: MutableMap<String, Any> = HashMap()
-                        event["event"] = "bufferingStart"
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                super.onTracksChanged(tracks)
+                extractAndSendTracks(tracks)
+            }
+            
+            private fun extractAndSendTracks(tracks: androidx.media3.common.Tracks) {
+                val trackList = ArrayList<Map<String, Any>>()
+                for (group in tracks.groups) {
+                    if (group.type == C.TRACK_TYPE_VIDEO) {
+                        for (i in 0 until group.length) {
+                            if (group.isTrackSupported(i)) {
+                                val format = group.getTrackFormat(i)
+                                val trackMap = HashMap<String, Any>()
+                                trackMap["id"] = format.id ?: ""
+                                trackMap["width"] = format.width
+                                trackMap["height"] = format.height
+                                trackMap["bitrate"] = format.bitrate
+                                trackList.add(trackMap)
+                            }
+                        }
+                    }
+                }
+                
+                if (trackList.isNotEmpty()) {
+                    android.util.Log.i("BetterPlayer", "Native: extractAndSendTracks found ${trackList.size} tracks")
+                    val event: MutableMap<String, Any> = HashMap()
+                    event["event"] = "tracksChanged"
+                    event["tracks"] = trackList
+                    Handler(Looper.getMainLooper()).post {
                         eventSink.success(event)
                     }
+                }
+            }
 
+            override fun onPlayerError(error: PlaybackException) {
+                super.onPlayerError(error)
+                android.util.Log.e("BetterPlayer", "Native: Player Error: ${error.message}", error)
+                eventSink.error("VideoError", "Video player had error $error", "")
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                when (playbackState) {
                     Player.STATE_READY -> {
+                        // 1. Initial initialization if needed
                         if (!isInitialized) {
                             isInitialized = true
                             sendInitialized()
                         }
+                        
+                        // 2. End buffering event
+                        val bufferingEndEvent: MutableMap<String, Any> = HashMap()
+                        bufferingEndEvent["event"] = "bufferingEnd"
+                        eventSink.success(bufferingEndEvent)
+
+                        // 3. Also extract tracks here as a fallback,
+                        // in case onTracksChanged fired before Flutter was listening
+                        exoPlayer?.currentTracks?.let { extractAndSendTracks(it) }
+                    }
+                    
+                    Player.STATE_BUFFERING -> {
+                        sendBufferingUpdate(true)
                         val event: MutableMap<String, Any> = HashMap()
-                        event["event"] = "bufferingEnd"
+                        event["event"] = "bufferingStart"
                         eventSink.success(event)
                     }
 
@@ -492,10 +539,6 @@ internal class BetterPlayer(
                         //no-op
                     }
                 }
-            }
-
-            override fun onPlayerError(error: PlaybackException) {
-                eventSink.error("VideoError", "Video player had error $error", "")
             }
         })
         val reply: MutableMap<String, Any> = HashMap()

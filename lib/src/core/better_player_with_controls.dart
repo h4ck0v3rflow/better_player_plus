@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+import 'dart:ui';
 import 'package:better_player_plus/better_player_plus.dart';
 import 'package:better_player_plus/src/configuration/better_player_controller_event.dart';
 import 'package:better_player_plus/src/controls/better_player_cupertino_controls.dart';
@@ -261,13 +262,54 @@ class _BetterPlayerVideoFitWidgetState extends State<_BetterPlayerVideoFitWidget
     });
   }
 
+  List<Widget> _buildBlurLogos(double videoWidth, double videoHeight) {
+    final blurLogos = widget.betterPlayerController.betterPlayerConfiguration.blurLogos;
+    if (blurLogos == null || blurLogos.isEmpty) return const [];
+
+    return blurLogos.map((blur) {
+      return Positioned(
+        left: blur.left * videoWidth,
+        top: blur.top * videoHeight,
+        width: blur.width * videoWidth,
+        height: blur.height * videoHeight,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(blur.borderRadius),
+          // Stack multiple BackdropFilter passes to compound the blur.
+          // A single pass only softens; 3 passes obliterate the logo
+          // while keeping the effect visually natural.
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: blur.sigmaX, sigmaY: blur.sigmaY),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: blur.sigmaX, sigmaY: blur.sigmaY),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: blur.sigmaX, sigmaY: blur.sigmaY),
+                child: Container(color: blur.overlayColor),
+              ),
+            ),
+          ),
+        ),
+      );
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_initialized && _started) {
+      final double videoWidth = max(1, controller!.value.size?.width ?? 1.0);
+      final double videoHeight = max(1, controller!.value.size?.height ?? 1.0);
+      
       // iOS platform views (UiKitView) don't play well with Clip/Transform/FittedBox.
       // Render the platform view directly to avoid black screen.
       if (Platform.isIOS) {
-        return SizedBox.expand(child: VideoPlayer(controller));
+        return SizedBox.expand(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              VideoPlayer(controller),
+              ..._buildBlurLogos(videoWidth, videoHeight),
+            ],
+          ),
+        );
       }
       return Center(
         child: ClipRect(
@@ -275,9 +317,15 @@ class _BetterPlayerVideoFitWidgetState extends State<_BetterPlayerVideoFitWidget
             child: FittedBox(
               fit: widget.boxFit,
               child: SizedBox(
-                width: max(1, controller!.value.size?.width ?? 1.0),
-                height: max(1, controller!.value.size?.height ?? 1.0),
-                child: VideoPlayer(controller),
+                width: videoWidth,
+                height: videoHeight,
+                child: Stack(
+                  fit: StackFit.passthrough,
+                  children: [
+                    VideoPlayer(controller),
+                    ..._buildBlurLogos(videoWidth, videoHeight),
+                  ],
+                ),
               ),
             ),
           ),

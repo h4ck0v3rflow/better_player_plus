@@ -41,6 +41,7 @@ class BetterPlayerConfiguration {
     this.autoDispose = true,
     this.expandToFill = true,
     this.useRootNavigator = false,
+    this.blurLogos,
   });
 
   /// Play the video as soon as it's displayed
@@ -154,6 +155,9 @@ class BetterPlayerConfiguration {
   ///Default value is false.
   final bool useRootNavigator;
 
+  ///List of blur overlays to place perfectly over the video frame to hide logos.
+  final List<BetterPlayerLogoBlur>? blurLogos;
+
   BetterPlayerConfiguration copyWith({
     double? aspectRatio,
     bool? autoPlay,
@@ -184,6 +188,7 @@ class BetterPlayerConfiguration {
     bool? autoDispose,
     bool? expandToFill,
     bool? useRootNavigator,
+    List<BetterPlayerLogoBlur>? blurLogos,
   }) => BetterPlayerConfiguration(
     aspectRatio: aspectRatio ?? this.aspectRatio,
     autoPlay: autoPlay ?? this.autoPlay,
@@ -214,5 +219,6 @@ class BetterPlayerConfiguration {
     autoDispose: autoDispose ?? this.autoDispose,
     expandToFill: expandToFill ?? this.expandToFill,
     useRootNavigator: useRootNavigator ?? this.useRootNavigator,
+    blurLogos: blurLogos ?? this.blurLogos,
   );
 }

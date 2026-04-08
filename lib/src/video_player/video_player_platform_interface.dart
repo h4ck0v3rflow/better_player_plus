@@ -373,6 +373,7 @@ class VideoEvent {
     this.size,
     this.buffered,
     this.position,
+    this.tracks,
   });
 
   /// The type of the event.
@@ -401,6 +402,9 @@ class VideoEvent {
   ///Seek position
   final Duration? position;
 
+  /// Video tracks
+  final List<dynamic>? tracks;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -410,10 +414,11 @@ class VideoEvent {
           eventType == other.eventType &&
           duration == other.duration &&
           size == other.size &&
-          listEquals(buffered, other.buffered);
+          listEquals(buffered, other.buffered) &&
+          listEquals(tracks, other.tracks);
 
   @override
-  int get hashCode => eventType.hashCode ^ duration.hashCode ^ size.hashCode ^ buffered.hashCode;
+  int get hashCode => eventType.hashCode ^ duration.hashCode ^ size.hashCode ^ buffered.hashCode ^ tracks.hashCode;
 }
 
 /// Type of the event.
@@ -450,6 +455,9 @@ enum VideoEventType {
 
   /// Picture in picture mode has been dismissed
   pipStop,
+
+  /// The tracks of the video have changed
+  tracksChanged,
 
   /// An unknown event has been received.
   unknown,

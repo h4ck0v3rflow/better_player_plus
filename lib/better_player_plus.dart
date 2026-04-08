@@ -8,6 +8,7 @@ export 'src/clearkey/better_player_clearkey_utils.dart';
 export 'src/configuration/better_player_buffering_configuration.dart';
 export 'src/configuration/better_player_cache_configuration.dart';
 export 'src/configuration/better_player_configuration.dart';
+export 'src/configuration/better_player_logo_blur.dart';
 export 'src/configuration/better_player_controls_configuration.dart';
 export 'src/configuration/better_player_data_source.dart';
 export 'src/configuration/better_player_data_source_type.dart';

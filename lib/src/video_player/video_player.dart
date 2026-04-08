@@ -231,6 +231,7 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
           value = value.copyWith(isPip: true);
         case VideoEventType.pipStop:
           value = value.copyWith(isPip: false);
+        case VideoEventType.tracksChanged:
         case VideoEventType.unknown:
           break;
       }
@@ -589,13 +590,12 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
     _videoPlayerPlatform.setMixWithOthers(_textureId, mixWithOthers);
   }
 
-  static Future<void> clearCache() async => _videoPlayerPlatform.clearCache();
+  static Future<void> clearCache() => _videoPlayerPlatform.clearCache();
 
-  static Future<void> preCache(DataSource dataSource, int preCacheSize) async =>
+  static Future<void> preCache(DataSource dataSource, int preCacheSize) =>
       _videoPlayerPlatform.preCache(dataSource, preCacheSize);
 
-  static Future<void> stopPreCache(String url, String? cacheKey) async =>
-      _videoPlayerPlatform.stopPreCache(url, cacheKey);
+  static Future<void> stopPreCache(String url, String? cacheKey) => _videoPlayerPlatform.stopPreCache(url, cacheKey);
 }
 
 /// Widget that displays the video controlled by [controller].
