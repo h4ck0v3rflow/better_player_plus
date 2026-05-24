@@ -103,6 +103,11 @@ internal class BetterPlayer(
     private val customDefaultLoadControl: CustomDefaultLoadControl =
         customDefaultLoadControl ?: CustomDefaultLoadControl()
     private var lastSendBufferedPosition = 0L
+    private var initializationStartTime = 0L
+    private var lastReportedPercent = 0
+    private var tracksFoundTime = 0L
+    private var progressHandler: Handler? = Handler(Looper.getMainLooper())
+    private var progressRunnable: Runnable? = null
 
     init {
         val loadBuilder = DefaultLoadControl.Builder()
@@ -203,6 +208,12 @@ internal class BetterPlayer(
             exoPlayer?.setMediaSource(mediaSource)
         }
         exoPlayer?.prepare()
+        initializationStartTime = System.currentTimeMillis()
+        tracksFoundTime = 0L
+        lastReportedPercent = 0
+        isInitialized = false
+        sendBufferingUpdate(true)
+        startProgressTimer()
         result.success(null)
     }
 
@@ -379,11 +390,12 @@ internal class BetterPlayer(
     ): MediaSource {
         val type: Int
         if (formatHint == null) {
-            var lastPathSegment = uri?.lastPathSegment
-            if (lastPathSegment == null) {
-                lastPathSegment = ""
+            val lastPathSegment = uri?.lastPathSegment ?: ""
+            type = if (lastPathSegment.contains(".ts", ignoreCase = true)) {
+                C.CONTENT_TYPE_OTHER
+            } else {
+                Util.inferContentType(uri ?: Uri.EMPTY)
             }
-            type = Util.inferContentTypeForExtension(lastPathSegment.split(".")[1])
         } else {
             type = when (formatHint) {
                 FORMAT_SS -> C.CONTENT_TYPE_SS
@@ -468,6 +480,9 @@ internal class BetterPlayer(
             }
             
             private fun extractAndSendTracks(tracks: androidx.media3.common.Tracks) {
+                if (tracksFoundTime == 0L) {
+                    tracksFoundTime = System.currentTimeMillis()
+                }
                 val trackList = ArrayList<Map<String, Any>>()
                 for (group in tracks.groups) {
                     if (group.type == C.TRACK_TYPE_VIDEO) {
@@ -486,7 +501,7 @@ internal class BetterPlayer(
                 }
                 
                 if (trackList.isNotEmpty()) {
-                    android.util.Log.i("BetterPlayer", "Native: extractAndSendTracks found ${trackList.size} tracks")
+                    // Tracks found
                     val event: MutableMap<String, Any> = HashMap()
                     event["event"] = "tracksChanged"
                     event["tracks"] = trackList
@@ -498,7 +513,8 @@ internal class BetterPlayer(
 
             override fun onPlayerError(error: PlaybackException) {
                 super.onPlayerError(error)
-                android.util.Log.e("BetterPlayer", "Native: Player Error: ${error.message}", error)
+                // Error occurred
+                stopProgressTimer()
                 eventSink.error("VideoError", "Video player had error $error", "")
             }
 
@@ -519,6 +535,7 @@ internal class BetterPlayer(
                         // 3. Also extract tracks here as a fallback,
                         // in case onTracksChanged fired before Flutter was listening
                         exoPlayer?.currentTracks?.let { extractAndSendTracks(it) }
+                        stopProgressTimer()
                     }
                     
                     Player.STATE_BUFFERING -> {
@@ -526,6 +543,7 @@ internal class BetterPlayer(
                         val event: MutableMap<String, Any> = HashMap()
                         event["event"] = "bufferingStart"
                         eventSink.success(event)
+                        startProgressTimer()
                     }
 
                     Player.STATE_ENDED -> {
@@ -548,15 +566,67 @@ internal class BetterPlayer(
 
     fun sendBufferingUpdate(isFromBufferingStart: Boolean) {
         val bufferedPosition = exoPlayer?.bufferedPosition ?: 0L
-        if (isFromBufferingStart || bufferedPosition != lastSendBufferedPosition) {
+        val currentPos = exoPlayer?.currentPosition ?: 0L
+        val bufferedAhead = (bufferedPosition - currentPos).coerceAtLeast(0L)
+        
+        if (isFromBufferingStart || bufferedPosition != lastSendBufferedPosition || !isInitialized) {
             val event: MutableMap<String, Any> = HashMap()
             event["event"] = "bufferingUpdate"
             val range: List<Number?> = listOf(0, bufferedPosition)
-            // iOS supports a list of buffered ranges, so here is a list with a single range.
             event["values"] = listOf(range)
+            
+            var percent: Int
+            
+            if (!isInitialized) {
+                if (tracksFoundTime == 0L) {
+                    // Initial wait: 0-5%
+                    val elapsed = System.currentTimeMillis() - initializationStartTime
+                    percent = (elapsed.toDouble() / 1000.0 * 5.0).toInt().coerceIn(0, 5)
+                } else {
+                    // Stage 1: Tracks found, climbing to 60%
+                    val trackElapsed = System.currentTimeMillis() - tracksFoundTime
+                    // Climb to 60% over 2 seconds
+                    percent = 5 + (trackElapsed.toDouble() / 2000.0 * 55.0).toInt().coerceIn(0, 55)
+                }
+            } else {
+                // Buffering phase (during playback)
+                val target = if (exoPlayer?.playbackState == Player.STATE_BUFFERING) {
+                    customDefaultLoadControl.bufferForPlaybackAfterRebufferMs.toDouble()
+                } else {
+                    customDefaultLoadControl.bufferForPlaybackMs.toDouble()
+                }
+                
+                percent = (bufferedAhead.toDouble() / target * 100.0).toInt().coerceIn(0, 100)
+            }
+            
+            // Ensure percentage only moves forward during initialization/loading
+            if (percent < lastReportedPercent && !isInitialized) {
+                percent = lastReportedPercent
+            }
+            lastReportedPercent = percent
+            
+            event["percent"] = percent
             eventSink.success(event)
             lastSendBufferedPosition = bufferedPosition
         }
+    }
+
+    private fun startProgressTimer() {
+        stopProgressTimer()
+        progressRunnable = object : Runnable {
+            override fun run() {
+                if (exoPlayer?.isLoading == true || exoPlayer?.playbackState == Player.STATE_BUFFERING || !isInitialized) {
+                    sendBufferingUpdate(false)
+                    progressHandler?.postDelayed(this, 100)
+                }
+            }
+        }
+        progressHandler?.postDelayed(progressRunnable!!, 0)
+    }
+
+    private fun stopProgressTimer() {
+        progressRunnable?.let { progressHandler?.removeCallbacks(it) }
+        progressRunnable = null
     }
 
     @Suppress("DEPRECATION")
@@ -635,6 +705,7 @@ internal class BetterPlayer(
             event["event"] = "initialized"
             event["key"] = key
             event["duration"] = getDuration()
+            event["percent"] = 100
             exoPlayer?.let { player ->
                 player.videoFormat?.let { videoFormat ->
                     var width = videoFormat.width
@@ -647,6 +718,7 @@ internal class BetterPlayer(
                     }
                     event["width"] = width
                     event["height"] = height
+                    event["percent"] = 100
                 }
             }
             eventSink.success(event)
@@ -796,6 +868,7 @@ internal class BetterPlayer(
     fun dispose() {
         disposeMediaSession()
         disposeRemoteNotifications()
+        stopProgressTimer()
         if (isInitialized) {
             exoPlayer?.stop()
         }

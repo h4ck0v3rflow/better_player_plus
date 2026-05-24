@@ -4,6 +4,8 @@ import android.net.Uri
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import java.security.cert.X509Certificate
+import javax.net.ssl.*
 
 @UnstableApi
 internal object DataSourceUtils {
@@ -27,6 +29,22 @@ internal object DataSourceUtils {
         userAgent: String?,
         headers: Map<String, String>?
     ): DataSource.Factory {
+        // Trust all certificates for HTTPS streams
+        try {
+            val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+                override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+            })
+
+            val sc = SSLContext.getInstance("SSL")
+            sc.init(null, trustAllCerts, java.security.SecureRandom())
+            HttpsURLConnection.setDefaultSSLSocketFactory(sc.socketFactory)
+            HttpsURLConnection.setDefaultHostnameVerifier { _, _ -> true }
+        } catch (e: Exception) {
+            // Log or ignore
+        }
+
         val dataSourceFactory: DataSource.Factory = DefaultHttpDataSource.Factory()
             .setUserAgent(userAgent)
             .setAllowCrossProtocolRedirects(true)

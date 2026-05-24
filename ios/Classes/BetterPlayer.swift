@@ -23,6 +23,8 @@ public class BetterPlayer: NSObject, FlutterPlatformView, FlutterStreamHandler, 
     public private(set) var isInitialized: Bool = false
     public private(set) var key: String? = nil
     public private(set) var failedCount: Int = 0
+    private var initializationStartTime: Date?
+    private var lastReportedPercent: Double = 0
 
     public var playerLayerRef: AVPlayerLayer?
     public var pictureInPicture: Bool = false
@@ -158,6 +160,9 @@ public class BetterPlayer: NSObject, FlutterPlatformView, FlutterStreamHandler, 
 
     public func setDataSourceURL(_ url: URL, key: String?, certificateUrl: String?, licenseUrl: String?, headers: [AnyHashable: Any], useCache: Bool, cacheKey: String?, cacheManager: CacheManager, overriddenDuration: Int, videoExtension: String?) {
         self.overriddenDuration = 0
+        self.initializationStartTime = Date()
+        self.lastReportedPercent = 0
+        self.isInitialized = false
         var finalHeaders = headers
         if finalHeaders["dummy"] == nil {} // keep dictionary type stable
 
@@ -281,7 +286,32 @@ public class BetterPlayer: NSObject, FlutterPlatformView, FlutterStreamHandler, 
                     }
                     values.append([start, end])
                 }
-                eventSink(["event": "bufferingUpdate", "values": values, "key": key as Any])
+                let totalDuration = item.duration.seconds
+                let bufferedDuration = availableDuration()
+                let currentPos = item.currentTime().seconds
+                let bufferedAhead = max(0, bufferedDuration - currentPos)
+                
+                var percent: Double = 0
+                if !isInitialized, let startTime = initializationStartTime {
+                    let elapsed = Date().timeIntervalSince(startTime)
+                    let timeWeight = (elapsed / 1.5) * 80.0
+                    let bufferWeight = (bufferedAhead / 0.5) * 20.0
+                    percent = min(98, max(0, timeWeight + bufferWeight))
+                } else if totalDuration > 0 && !totalDuration.isNaN {
+                    // Buffering during VOD: Use a 2s target for the "interactive" feel
+                    percent = (bufferedAhead / 2.0) * 100
+                } else {
+                    // Live streams
+                    percent = (bufferedAhead / 2.0) * 100
+                }
+                
+                if percent < lastReportedPercent && !isInitialized {
+                    percent = lastReportedPercent
+                }
+                lastReportedPercent = percent
+                if percent > 100 { percent = 100 }
+                
+                eventSink(["event": "bufferingUpdate", "values": values, "key": key as Any, "percent": percent])
             }
         } else if context == &presentationSizeContext {
             onReadyToPlay()
@@ -367,6 +397,7 @@ public class BetterPlayer: NSObject, FlutterPlatformView, FlutterStreamHandler, 
                    "duration": NSNumber(value: duration()),
                    "width": NSNumber(value: Float(width)),
                    "height": NSNumber(value: Float(height)),
+                   "percent": 100,
                    "key": key as Any])
     }
 

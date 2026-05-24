@@ -374,6 +374,7 @@ class VideoEvent {
     this.buffered,
     this.position,
     this.tracks,
+    this.percent,
   });
 
   /// The type of the event.
@@ -405,6 +406,9 @@ class VideoEvent {
   /// Video tracks
   final List<dynamic>? tracks;
 
+  /// Buffering percentage
+  final double? percent;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -415,10 +419,17 @@ class VideoEvent {
           duration == other.duration &&
           size == other.size &&
           listEquals(buffered, other.buffered) &&
-          listEquals(tracks, other.tracks);
+          listEquals(tracks, other.tracks) &&
+          percent == other.percent;
 
   @override
-  int get hashCode => eventType.hashCode ^ duration.hashCode ^ size.hashCode ^ buffered.hashCode ^ tracks.hashCode;
+  int get hashCode =>
+      eventType.hashCode ^
+      duration.hashCode ^
+      size.hashCode ^
+      buffered.hashCode ^
+      tracks.hashCode ^
+      percent.hashCode;
 }
 
 /// Type of the event.

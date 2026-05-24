@@ -298,6 +298,7 @@ class MethodChannelVideoPlayer extends VideoPlayerPlatform {
           key: key,
           duration: Duration(milliseconds: map['duration'] as int),
           size: size,
+          percent: (map['percent'] as num?)?.toDouble(),
         );
       case 'completed':
         return VideoEvent(eventType: VideoEventType.completed, key: key);
@@ -308,6 +309,7 @@ class MethodChannelVideoPlayer extends VideoPlayerPlatform {
           eventType: VideoEventType.bufferingUpdate,
           key: key,
           buffered: values.map<DurationRange>(_toDurationRange).toList(),
+          percent: (map['percent'] as num?)?.toDouble(),
         );
       case 'bufferingStart':
         return VideoEvent(eventType: VideoEventType.bufferingStart, key: key);
